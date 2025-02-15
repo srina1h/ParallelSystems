@@ -3,7 +3,7 @@
 #include <mpi.h>
 #include "include/cmdline.h"
 #include "include/input.h"
-#include "include/config.h"
+#include "config.h"
 #include "include/timer.h"
 #include "include/formats.h"
 
