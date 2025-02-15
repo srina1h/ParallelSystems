@@ -1,6 +1,6 @@
 CC=mpicc
 #FLAG=-g -Wall
-FLAG=-O3 -std=c99 -I./include/ -Wno-unused-result -Wno-write-strings
+FLAG=-O3 -lm -std=c99 -I./include/ -Wno-unused-result -Wno-write-strings
 LDFLAG=-O3
 
 OBJS=spmv.o mmio.o 
