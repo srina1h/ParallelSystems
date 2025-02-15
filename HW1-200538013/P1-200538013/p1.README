@@ -1,0 +1,24 @@
+Plots Explanation:
+
+X - axis - Message sizes in KB
+Y - axis - Average RTT in microseconds
+Errorbars - standard deviation over the measured average RTT
+
+The latency across sending messages of all sizes between 1,2,3 & 4 pairs
+of nodes is similar for each message size. This means that regardless of
+the number of pairs communicating, the RTT only depends on the message size.
+
+The network configuration is similar for all pairs, therefore the time remains similar.
+
+Increasing message sizes increases the average RTT in all pairs. This increases
+shows a linear increase in Avg RTT with increase in message size (seems exponential
+in graph because of X-axis spacing (doubling of values in x axis))
+
+Outliers:
+
+For message size of 512 KB we see a slight increase with increasing number of pairs
+of nodes communicating. This seems a random outlier as other sizes dont show this trend.
+
+All the pairs and message sizes show a good variance in timing. This could maybe arise due
+to varying network load.
+
