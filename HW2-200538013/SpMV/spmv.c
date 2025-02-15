@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
-#include "cmdline.h"
-#include "input.h"
-#include "config.h"
-#include "timer.h"
-#include "formats.h"
+#include "include/cmdline.h"
+#include "include/input.h"
+#include "include/config.h"
+#include "include/timer.h"
+#include "include/formats.h"
 
 #define max(a, b) \
     ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); \
