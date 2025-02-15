@@ -1,5 +1,6 @@
-
 #include <stdio.h>
+#include <stdlib.h>
+#include <mpi.h>
 #include "cmdline.h"
 #include "input.h"
 #include "config.h"
@@ -7,47 +8,39 @@
 #include "formats.h"
 
 #define max(a, b) \
-    ({ __typeof__ (a) _a = (a); \
-   __typeof__ (b) _b = (b); \
- _a > _b ? _a : _b; })
+    ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); \
+   _a > _b ? _a : _b; })
 
 #define min(a, b) \
-    ({ __typeof__ (a) _a = (a); \
-   __typeof__ (b) _b = (b); \
- _a < _b ? _a : _b; })
+    ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); \
+   _a < _b ? _a : _b; })
 
 void usage(int argc, char **argv)
 {
     printf("Usage: %s [my_matrix.mtx]\n", argv[0]);
-    printf("Note: my_matrix.mtx must be real-valued sparse matrix in the MatrixMarket file format.\n");
+    printf("Note: my_matrix.mtx must be a real-valued sparse matrix in MatrixMarket format.\n");
 }
 
-// MIN_ITER, MAX_ITER, TIME_LIMIT,
+// This function performs spMV on the given COO matrix.
+// It assumes that the provided x vector is global (or already broadcasted)
+// and that y is the output vector (local in our MPI partition).
 double benchmark_coo_spmv(coo_matrix *coo, float *x, float *y)
 {
     int num_nonzeros = coo->num_nonzeros;
 
-    // warmup
+    // warmup: perform one iteration
     timer time_one_iteration;
     timer_start(&time_one_iteration);
     for (int i = 0; i < num_nonzeros; i++)
     {
         y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
     }
-
     double estimated_time = seconds_elapsed(&time_one_iteration);
-    //    printf("estimated time for once %f\n", (float) estimated_time);
 
-    // determine # of seconds dynamically
-    int num_iterations;
-    num_iterations = MAX_ITER;
-
-    if (estimated_time == 0)
-        num_iterations = MAX_ITER;
-    else
-    {
+    // determine number of iterations dynamically
+    int num_iterations = MAX_ITER;
+    if (estimated_time != 0)
         num_iterations = min(MAX_ITER, max(MIN_ITER, (int)(TIME_LIMIT / estimated_time)));
-    }
     printf("\tPerforming %d iterations\n", num_iterations);
 
     // time several SpMV iterations
@@ -69,100 +62,198 @@ double benchmark_coo_spmv(coo_matrix *coo, float *x, float *y)
 
 int main(int argc, char **argv)
 {
-    if (get_arg(argc, argv, "help") != NULL)
+    int rank, size;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    coo_matrix global_coo; // global matrix (only used on rank 0)
+    int global_num_rows, global_num_cols;
+    float *x = NULL; // global vector x
+
+    if (rank == 0)
     {
-        usage(argc, argv);
-        return 0;
+        if (argc < 2)
+        {
+            printf("Give a MatrixMarket file.\n");
+            MPI_Abort(MPI_COMM_WORLD, -1);
+        }
+        char *mm_filename = argv[1];
+        read_coo_matrix(&global_coo, mm_filename);
+        global_num_rows = global_coo.num_rows;
+        global_num_cols = global_coo.num_cols;
+
+        // Initialize global vector x with random values
+        x = (float *)malloc(global_num_cols * sizeof(float));
+        for (int i = 0; i < global_num_cols; i++)
+        {
+            x[i] = (float)rand() / (RAND_MAX + 1.0);
+        }
+        printf("\nfile=%s rows=%d cols=%d nonzeros=%d\n", mm_filename, global_num_rows, global_num_cols, global_coo.num_nonzeros);
+        fflush(stdout);
     }
 
-    char *mm_filename = NULL;
-    if (argc == 1)
+    // Broadcast matrix dimensions to all processes
+    MPI_Bcast(&global_num_rows, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&global_num_cols, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Make sure all processes have vector x.
+    if (rank != 0)
     {
-        printf("Give a MatrixMarket file.\n");
-        return -1;
+        x = (float *)malloc(global_num_cols * sizeof(float));
+    }
+    MPI_Bcast(x, global_num_cols, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+    // Determine the row partition for each MPI process.
+    // Here, we partition rows as evenly as possible.
+    int rows_per_proc = global_num_rows / size;
+    int extra = global_num_rows % size;
+    int rstart = rank * rows_per_proc + (rank < extra ? rank : extra);
+    int rcount = rows_per_proc + (rank < extra ? 1 : 0);
+    int rend = rstart + rcount;
+
+    // Partition the matrix among processes.
+    // Rank 0 filters the global COO matrix and sends each process its appropriate rows.
+    int local_nonzeros;
+    int *local_rows = NULL;
+    int *local_cols = NULL;
+    float *local_vals = NULL;
+
+    if (rank == 0)
+    {
+        // Filter for rank 0 (its part: rows [rstart, rend))
+        local_nonzeros = 0;
+        for (int i = 0; i < global_coo.num_nonzeros; i++)
+        {
+            int r = global_coo.rows[i];
+            if (r >= rstart && r < rend)
+                local_nonzeros++;
+        }
+        local_rows = (int *)malloc(local_nonzeros * sizeof(int));
+        local_cols = (int *)malloc(local_nonzeros * sizeof(int));
+        local_vals = (float *)malloc(local_nonzeros * sizeof(float));
+        int idx = 0;
+        for (int i = 0; i < global_coo.num_nonzeros; i++)
+        {
+            int r = global_coo.rows[i];
+            if (r >= rstart && r < rend)
+            {
+                // Adjust global to local row index
+                local_rows[idx] = r - rstart;
+                local_cols[idx] = global_coo.cols[i];
+                local_vals[idx] = global_coo.vals[i];
+                idx++;
+            }
+        }
+        // For every other process, filter its part and send the data.
+        for (int p = 1; p < size; p++)
+        {
+            int prstart = p * rows_per_proc + (p < extra ? p : extra);
+            int prcount = rows_per_proc + (p < extra ? 1 : 0);
+            int prend = prstart + prcount;
+            int count = 0;
+            // Count nonzeros for process p.
+            for (int i = 0; i < global_coo.num_nonzeros; i++)
+            {
+                int r = global_coo.rows[i];
+                if (r >= prstart && r < prend)
+                    count++;
+            }
+            MPI_Send(&count, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
+            if (count > 0)
+            {
+                int *tmp_rows = (int *)malloc(count * sizeof(int));
+                int *tmp_cols = (int *)malloc(count * sizeof(int));
+                float *tmp_vals = (float *)malloc(count * sizeof(float));
+                int idx2 = 0;
+                for (int i = 0; i < global_coo.num_nonzeros; i++)
+                {
+                    int r = global_coo.rows[i];
+                    if (r >= prstart && r < prend)
+                    {
+                        tmp_rows[idx2] = r - prstart;
+                        tmp_cols[idx2] = global_coo.cols[i];
+                        tmp_vals[idx2] = global_coo.vals[i];
+                        idx2++;
+                    }
+                }
+                MPI_Send(tmp_rows, count, MPI_INT, p, 1, MPI_COMM_WORLD);
+                MPI_Send(tmp_cols, count, MPI_INT, p, 2, MPI_COMM_WORLD);
+                MPI_Send(tmp_vals, count, MPI_FLOAT, p, 3, MPI_COMM_WORLD);
+                free(tmp_rows);
+                free(tmp_cols);
+                free(tmp_vals);
+            }
+        }
     }
     else
-        mm_filename = argv[1];
-
-    coo_matrix coo;
-    read_coo_matrix(&coo, mm_filename);
-
-    // fill matrix with random values: some matrices have extreme values,
-    // which makes correctness testing difficult, especially in single precision
-    srand(13);
-    for (int i = 0; i < coo.num_nonzeros; i++)
     {
-        coo.vals[i] = 1.0 - 2.0 * (rand() / (RAND_MAX + 1.0));
-        // coo.vals[i] = 1.0;
+        // Other ranks receive the number of nonzeros and then the data.
+        MPI_Recv(&local_nonzeros, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        if (local_nonzeros > 0)
+        {
+            local_rows = (int *)malloc(local_nonzeros * sizeof(int));
+            local_cols = (int *)malloc(local_nonzeros * sizeof(int));
+            local_vals = (float *)malloc(local_nonzeros * sizeof(float));
+            MPI_Recv(local_rows, local_nonzeros, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(local_cols, local_nonzeros, MPI_INT, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(local_vals, local_nonzeros, MPI_FLOAT, 0, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
     }
 
-    printf("\nfile=%s rows=%d cols=%d nonzeros=%d\n", mm_filename, coo.num_rows, coo.num_cols, coo.num_nonzeros);
-    fflush(stdout);
+    // Build a local COO structure for the local partition.
+    coo_matrix local_coo;
+    local_coo.num_rows = rcount;
+    local_coo.num_cols = global_num_cols;
+    local_coo.num_nonzeros = local_nonzeros;
+    local_coo.rows = local_rows;
+    local_coo.cols = local_cols;
+    local_coo.vals = local_vals;
 
-#ifdef TESTING
-    // print in COO format
-    printf("Writing matrix in COO format to test_COO ...");
-    FILE *fp = fopen("test_COO", "w");
-    fprintf(fp, "%d\t%d\t%d\n", coo.num_rows, coo.num_cols, coo.num_nonzeros);
-    fprintf(fp, "coo.rows:\n");
-    for (int i = 0; i < coo.num_nonzeros; i++)
+    // Allocate local y vector (initialized to zero)
+    float *local_y = (float *)calloc(rcount, sizeof(float));
+
+    // Run the local SpMV benchmark computation.
+    double local_time = benchmark_coo_spmv(&local_coo, x, local_y);
+
+    // Gather the computed local y vectors back to rank 0.
+    float *global_y = NULL;
+    int *recvcounts = NULL;
+    int *displs = NULL;
+    if (rank == 0)
     {
-        fprintf(fp, "%d  ", coo.rows[i]);
+        global_y = (float *)malloc(global_num_rows * sizeof(float));
+        recvcounts = (int *)malloc(size * sizeof(int));
+        displs = (int *)malloc(size * sizeof(int));
+        for (int p = 0; p < size; p++)
+        {
+            int prcount = rows_per_proc + (p < extra ? 1 : 0);
+            recvcounts[p] = prcount;
+            int prstart = p * rows_per_proc + (p < extra ? p : extra);
+            displs[p] = prstart;
+        }
     }
-    fprintf(fp, "\n\n");
-    fprintf(fp, "coo.cols:\n");
-    for (int i = 0; i < coo.num_nonzeros; i++)
+    MPI_Gatherv(local_y, rcount, MPI_FLOAT, global_y, recvcounts, displs, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+    if (rank == 0)
     {
-        fprintf(fp, "%d  ", coo.cols[i]);
+        printf("Parallel spMV complete. Global y computed.\n");
+        free(global_y);
+        free(recvcounts);
+        free(displs);
+        delete_coo_matrix(&global_coo);
+        free(x);
     }
-    fprintf(fp, "\n\n");
-    fprintf(fp, "coo.vals:\n");
-    for (int i = 0; i < coo.num_nonzeros; i++)
-    {
-        fprintf(fp, "%f  ", coo.vals[i]);
-    }
-    fprintf(fp, "\n");
-    fclose(fp);
-    printf("... done!\n");
-#endif
+    free(local_y);
+    if (rank != 0)
+        free(x);
+    if (local_rows)
+        free(local_rows);
+    if (local_cols)
+        free(local_cols);
+    if (local_vals)
+        free(local_vals);
 
-    // initialize host arrays
-    float *x = (float *)malloc(coo.num_cols * sizeof(float));
-    float *y = (float *)malloc(coo.num_rows * sizeof(float));
-
-    for (int i = 0; i < coo.num_cols; i++)
-    {
-        x[i] = rand() / (RAND_MAX + 1.0);
-        // x[i] = 1;
-    }
-    for (int i = 0; i < coo.num_rows; i++)
-        y[i] = 0;
-
-    /* Benchmarking */
-    double coo_gflops;
-    coo_gflops = benchmark_coo_spmv(&coo, x, y);
-
-    /* Test correctnesss */
-#ifdef TESTING
-    printf("Writing x and y vectors ...");
-    fp = fopen("test_x", "w");
-    for (int i = 0; i < coo.num_cols; i++)
-    {
-        fprintf(fp, "%f\n", x[i]);
-    }
-    fclose(fp);
-    fp = fopen("test_y", "w");
-    for (int i = 0; i < coo.num_rows; i++)
-    {
-        fprintf(fp, "%f\n", y[i]);
-    }
-    fclose(fp);
-    printf("... done!\n");
-#endif
-
-    delete_coo_matrix(&coo);
-    free(x);
-    free(y);
-
+    MPI_Finalize();
     return 0;
 }
