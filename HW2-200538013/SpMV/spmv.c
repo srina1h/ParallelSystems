@@ -6,6 +6,7 @@
 #include "config.h"
 #include "include/timer.h"
 #include "include/formats.h"
+#include "mmio.c"
 
 #define max(a, b) \
     ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); \
