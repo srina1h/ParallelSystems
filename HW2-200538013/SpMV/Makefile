@@ -9,7 +9,7 @@ OBJS=spmv.o mmio.o
 	${CC} -o $@ -c ${FLAG} $<
 
 spmv: ${OBJS}
-	${CC}  ${LDFLAG} -o $@ $^
+	${CC} -lm ${LDFLAG} -o $@ $^
 
 .PHONY:clean
 clean: 
