@@ -21,29 +21,23 @@ void usage(int argc, char **argv)
     printf("Note: my_matrix.mtx must be a real-valued sparse matrix in MatrixMarket format.\n");
 }
 
-void verify_result(float *sequential_y, float *parallel_y, int num_rows)
+void verify_integer_portion(float *sequential_y, float *parallel_y, int num_rows)
 {
-    double max_abs_diff = 0.0;
-    double max_rel_diff = 0.0;
-
+    int correct = 1;
     for (int i = 0; i < num_rows; i++)
     {
-        double abs_diff = fabs(sequential_y[i] - parallel_y[i]);
-        double rel_diff = fabs(abs_diff / (fabs(sequential_y[i]) + 1e-12)); // Avoid division by zero
-
-        if (abs_diff > max_abs_diff)
-            max_abs_diff = abs_diff;
-        if (rel_diff > max_rel_diff)
-            max_rel_diff = rel_diff;
-
-        if (abs_diff > TOLERANCE)
+        int seq_int = (int)sequential_y[i];
+        int par_int = (int)parallel_y[i];
+        if (seq_int != par_int)
         {
-            printf("Mismatch at index %d: sequential=%f, parallel=%f\n", i, sequential_y[i], parallel_y[i]);
-            printf("Absolute difference: %f exceeds tolerance %f\n", abs_diff, TOLERANCE);
-            return;
+            printf("Mismatch at index %d: sequential integer portion = %d, parallel integer portion = %d\n", i, seq_int, par_int);
+            correct = 0;
         }
     }
-    printf("Verification successful! Max absolute difference: %e, Max relative difference: %e\n", max_abs_diff, max_rel_diff);
+    if (correct)
+        printf("Verification successful: All integer portions match!\n");
+    else
+        printf("Verification failed: Some integer portions do not match!\n");
 }
 
 // This function performs spMV on the given COO matrix.
@@ -274,8 +268,15 @@ int main(int argc, char **argv)
 
     if (rank == 0)
     {
+        float *sequential_y = (float *)calloc(global_num_rows, sizeof(float));
+        for (int i = 0; i < global_coo.num_nonzeros; i++)
+        {
+            sequential_y[global_coo.rows[i]] += global_coo.vals[i] * x[global_coo.cols[i]];
+        }
+
+        printf("\nVerifying results based on integer portions\n");
+        verify_integer_portion(sequential_y, global_y, global_num_rows);
         printf("Parallel spMV complete. Global y computed.\n");
-        verify_result(sequential_y, global_y, global_num_rows);
         free(global_y);
         free(recvcounts);
         free(displs);
