@@ -236,17 +236,6 @@ int main(int argc, char **argv)
     // Run the local SpMV benchmark computation.
     double local_time = benchmark_coo_spmv(&local_coo, x, local_y);
 
-    // Compute sequential SpMV result on rank 0
-    float *sequential_y = NULL;
-    if (rank == 0)
-    {
-        sequential_y = (float *)calloc(global_num_rows, sizeof(float));
-        for (int i = 0; i < global_coo.num_nonzeros; i++)
-        {
-            sequential_y[global_coo.rows[i]] += global_coo.vals[i] * x[global_coo.cols[i]];
-        }
-    }
-
     // Gather the computed local y vectors back to rank 0.
     float *global_y = NULL;
     int *recvcounts = NULL;
