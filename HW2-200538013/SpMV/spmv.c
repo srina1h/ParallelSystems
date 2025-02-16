@@ -7,18 +7,16 @@
 #include "timer.h"
 #include "formats.h"
 
-#define max(a, b)
-({ typeof (a) _a = (a);
-typeof (b) _b = (b);
-_a > _b ? _a : _b; })
+#define max(a, b) \
+    ({ __typeof__ (a) _a = (a); \
+   __typeof__ (b) _b = (b); \
+ _a > _b ? _a : _b; })
 
-#define min(a, b)
-    ({ typeof (a) _a = (a);
-typeof (b) _b = (b);
-_a < _b ? _a : _b; })
-
-        void
-        usage(int argc, char **argv)
+#define min(a, b) \
+    ({ __typeof__ (a) _a = (a); \
+   __typeof__ (b) _b = (b); \
+ _a < _b ? _a : _b; })
+void usage(int argc, char **argv)
 {
     printf("Usage: %s [my_matrix.mtx]\n", argv);
     printf("Note: my_matrix.mtx must be real-valued sparse matrix in the MatrixMarket file format.\n");
