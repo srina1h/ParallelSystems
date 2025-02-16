@@ -83,7 +83,7 @@ int main(int argc, char **argv)
     }
     else
     {
-        mm_filename = argv;
+        mm_filename = argv[1];
     }
 
     coo_matrix coo;
