@@ -1,6 +1,7 @@
-CC=mpicc
+CC=gcc
 #FLAG=-g -Wall
-FLAG=-O3 -lm -std=c99 -I./include/ -Wno-unused-result -Wno-write-strings
+# FLAG=-O3 -lm -std=c99 -I./include/ -Wno-unused-result -Wno-write-strings
+FLAG=-O3 -std=c99 -I./include/ -I/usr/local/opt/libomp/include -Wno-unused-result -Wno-write-strings
 LDFLAG=-O3
 
 OBJS=spmv.o mmio.o 
@@ -9,7 +10,7 @@ OBJS=spmv.o mmio.o
 	${CC} -o $@ -c ${FLAG} $<
 
 spmv: ${OBJS}
-	${CC} -lm ${LDFLAG} -o $@ $^
+	${CC} -lm ${LDFLAG} -o $@ $^ -fopenmp
 
 .PHONY:clean
 clean: 
