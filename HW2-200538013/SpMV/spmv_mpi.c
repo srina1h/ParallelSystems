@@ -40,51 +40,51 @@ void verify_integer_portion(float *sequential_y, float *parallel_y, int num_rows
         printf("Verification failed: Some integer portions do not match!\n");
 }
 
-double benchmark_coo_spmv(coo_matrix *coo, float *x, float *y)
-{
-    int num_nonzeros = coo->num_nonzeros;
-    // Make a copy of y to use for each iteration so that y doesn't accumulate.
-    // Or, if you want to time the full accumulated operation, reinitialize y before verification.
-    // For instance, use a local temporary result vector.
-    float *temp_y = (float *)calloc(coo->num_rows, sizeof(float));
+// double benchmark_coo_spmv(coo_matrix *coo, float *x, float *y)
+// {
+//     int num_nonzeros = coo->num_nonzeros;
+//     // Make a copy of y to use for each iteration so that y doesn't accumulate.
+//     // Or, if you want to time the full accumulated operation, reinitialize y before verification.
+//     // For instance, use a local temporary result vector.
+//     float *temp_y = (float *)calloc(coo->num_rows, sizeof(float));
 
-    // Warmup: perform one iteration using temp_y
-    timer time_one_iteration;
-    timer_start(&time_one_iteration);
-    for (int i = 0; i < num_nonzeros; i++)
-    {
-        y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
-    }
-    double estimated_time = seconds_elapsed(&time_one_iteration);
+//     // Warmup: perform one iteration using temp_y
+//     timer time_one_iteration;
+//     timer_start(&time_one_iteration);
+//     for (int i = 0; i < num_nonzeros; i++)
+//     {
+//         y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
+//     }
+//     double estimated_time = seconds_elapsed(&time_one_iteration);
 
-    // Determine number of iterations dynamically
-    int num_iterations = MAX_ITER;
-    if (estimated_time != 0)
-        num_iterations = min(MAX_ITER, max(MIN_ITER, (int)(TIME_LIMIT / estimated_time)));
-    printf("\tPerforming %d iterations\n", num_iterations);
+//     // Determine number of iterations dynamically
+//     int num_iterations = MAX_ITER;
+//     if (estimated_time != 0)
+//         num_iterations = min(MAX_ITER, max(MIN_ITER, (int)(TIME_LIMIT / estimated_time)));
+//     printf("\tPerforming %d iterations\n", num_iterations);
 
-    // Zero out temp_y before timing multiple iterations.
-    for (int i = 0; i < coo->num_rows; i++)
-        temp_y[i] = 0;
+//     // Zero out temp_y before timing multiple iterations.
+//     for (int i = 0; i < coo->num_rows; i++)
+//         temp_y[i] = 0;
 
-    // Time several SpMV iterations on temp_y
-    timer t;
-    timer_start(&t);
-    for (int j = 0; j < num_iterations; j++)
-        for (int i = 0; i < num_nonzeros; i++)
-        {
-            temp_y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
-        }
-    double msec_per_iteration = milliseconds_elapsed(&t) / (double)num_iterations;
+//     // Time several SpMV iterations on temp_y
+//     timer t;
+//     timer_start(&t);
+//     for (int j = 0; j < num_iterations; j++)
+//         for (int i = 0; i < num_nonzeros; i++)
+//         {
+//             temp_y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
+//         }
+//     double msec_per_iteration = milliseconds_elapsed(&t) / (double)num_iterations;
 
-    double sec_per_iteration = msec_per_iteration / 1000.0;
-    double GFLOPs = (sec_per_iteration == 0) ? 0 : (2.0 * (double)coo->num_nonzeros / sec_per_iteration) / 1e9;
-    double GBYTEs = (sec_per_iteration == 0) ? 0 : ((double)bytes_per_coo_spmv(coo) / sec_per_iteration) / 1e9;
-    printf("\tbenchmarking COO-SpMV: %8.4f ms ( %5.2f GFLOP/s %5.1f GB/s)\n", msec_per_iteration, GFLOPs, GBYTEs);
+//     double sec_per_iteration = msec_per_iteration / 1000.0;
+//     double GFLOPs = (sec_per_iteration == 0) ? 0 : (2.0 * (double)coo->num_nonzeros / sec_per_iteration) / 1e9;
+//     double GBYTEs = (sec_per_iteration == 0) ? 0 : ((double)bytes_per_coo_spmv(coo) / sec_per_iteration) / 1e9;
+//     printf("\tbenchmarking COO-SpMV: %8.4f ms ( %5.2f GFLOP/s %5.1f GB/s)\n", msec_per_iteration, GFLOPs, GBYTEs);
 
-    free(temp_y);
-    return msec_per_iteration;
-}
+//     free(temp_y);
+//     return msec_per_iteration;
+// }
 
 int main(int argc, char **argv)
 {
@@ -240,8 +240,16 @@ int main(int argc, char **argv)
     // Allocate local y vector (initialized to zero)
     float *local_y = (float *)calloc(rcount, sizeof(float));
 
+    MPI_Barrier(MPI_COMM_WORLD);
+    double t_start = MPI_Wtime();
+
     // Run the local SpMV benchmark computation.
-    double local_time = benchmark_coo_spmv(&local_coo, x, local_y);
+    // double local_time = benchmark_coo_spmv(&local_coo, x, local_y);
+
+    for (int i = 0; i < local_nonzeros; i++)
+    {
+        local_y[local_rows[i]] += local_vals[i] * x[local_cols[i]];
+    }
 
     // Gather the computed local y vectors back to rank 0.
     float *global_y = NULL;
@@ -262,6 +270,11 @@ int main(int argc, char **argv)
     }
     MPI_Gatherv(local_y, rcount, MPI_FLOAT, global_y, recvcounts, displs, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
+    MPI_Barrier(MPI_COMM_WORLD);
+    double t_end = MPI_Wtime();
+
+    double elapsed = t_end - t_start;
+
     if (rank == 0)
     {
         float *sequential_y = (float *)calloc(global_num_rows, sizeof(float));
@@ -272,7 +285,10 @@ int main(int argc, char **argv)
 
         printf("\nVerifying results based on integer portions\n");
         verify_integer_portion(sequential_y, global_y, global_num_rows);
-        printf("Parallel spMV complete. Global y computed.\n");
+        double total_flops = 2.0 * global_coo.num_nonzeros;
+        double gflops = (total_flops / elapsed) / 1e9;
+        printf("Single spMV run took %f seconds, achieving %f GFLOP/s\n", elapsed, gflops);
+
         free(global_y);
         free(recvcounts);
         free(displs);
