@@ -22,7 +22,7 @@ void usage(int argc, char **argv)
     printf("Note: my_matrix.mtx must be real-valued sparse matrix in the MatrixMarket file format.\n");
 }
 
-double benchmark_coo_spmv(coo_matrix coo, float x, float *y)
+double benchmark_coo_spmv(coo_matrix *coo, float x, float *y)
 {
     int num_nonzeros = coo->num_nonzeros;
 
