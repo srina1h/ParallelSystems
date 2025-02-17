@@ -26,47 +26,32 @@ double benchmark_coo_spmv(coo_matrix *coo, float *x, float *y)
 {
     int num_nonzeros = coo->num_nonzeros;
 
-    // Warmup
-    timer time_one_iteration;
-    timer_start(&time_one_iteration);
+    // Start the timer for one iteration.
+    timer t;
+    timer_start(&t);
 
-// Parallelized warmup loop with OpenMP.
-// Atomic directive is used to protect the update into y.
+// Perform one iteration of SpMV using OpenMP.
 #pragma omp parallel for
     for (int i = 0; i < num_nonzeros; i++)
     {
 #pragma omp atomic
         y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
     }
-    double estimated_time = seconds_elapsed(&time_one_iteration);
-    // Determine number of iterations dynamically (using MIN_ITER, MAX_ITER, TIME_LIMIT)
-    int num_iterations = MAX_ITER;
-    if (estimated_time != 0)
-        num_iterations = min(MAX_ITER, max(MIN_ITER, (int)(TIME_LIMIT / estimated_time)));
-    printf("\tPerforming %d iterations\n", num_iterations);
 
-    // Timing several SpMV iterations
-    timer t;
-    timer_start(&t);
-    for (int j = 0; j < num_iterations; j++)
-    {
-// Parallelized inner loop with OpenMP and atomic update for each nonzero.
-#pragma omp parallel for
-        for (int i = 0; i < num_nonzeros; i++)
-        {
-#pragma omp atomic
-            y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
-        }
-    }
-    double msec_per_iteration = milliseconds_elapsed(&t) / (double)num_iterations;
-    double sec_per_iteration = msec_per_iteration / 1000.0;
-    double GFLOPs = (sec_per_iteration == 0) ? 0 : (2.0 * (double)coo->num_nonzeros / sec_per_iteration) / 1e9;
-    double GBYTEs = (sec_per_iteration == 0) ? 0 : ((double)bytes_per_coo_spmv(coo) / sec_per_iteration) / 1e9;
-    printf("\tbenchmarking COO-SpMV: %8.4f ms ( %5.2f GFLOP/s %5.1f GB/s)\n", msec_per_iteration, GFLOPs, GBYTEs);
+    // Measure the elapsed time in seconds.
+    double sec = seconds_elapsed(&t);
 
-    return msec_per_iteration;
+    // Convert seconds to milliseconds for printing.
+    double msec = sec * 1000.0;
+
+    // Calculate GFLOP/s: each nonzero requires two flops (a multiply and an add).
+    double GFLOPs = (sec == 0) ? 0 : (2.0 * (double)num_nonzeros / sec) / 1e9;
+
+    printf("\tbenchmarking COO-SpMV (1 iteration): %8.4f ms ( %5.2f GFLOP/s)\n",
+           msec, GFLOPs);
+
+    return sec;
 }
-
 int main(int argc, char **argv)
 {
     if (get_arg(argc, argv, "help") != NULL)
