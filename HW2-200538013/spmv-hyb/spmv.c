@@ -60,6 +60,7 @@ int main(int argc, char **argv)
             MPI_Abort(MPI_COMM_WORLD, -1);
         }
         char *mm_filename = argv[1];
+        printf("Reading matrix from file %s\n", mm_filename);
         read_coo_matrix(&global_coo, mm_filename);
         global_num_rows = global_coo.num_rows;
         global_num_cols = global_coo.num_cols;

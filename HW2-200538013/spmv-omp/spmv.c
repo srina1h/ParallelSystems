@@ -69,6 +69,7 @@ int main(int argc, char **argv)
     else
     {
         mm_filename = argv[1];
+        printf("Reading matrix from file %s\n", mm_filename);
     }
 
     coo_matrix coo;
@@ -83,30 +84,6 @@ int main(int argc, char **argv)
 
     printf("\nfile=%s rows=%d cols=%d nonzeros=%d\n", mm_filename, coo.num_rows, coo.num_cols, coo.num_nonzeros);
     fflush(stdout);
-#ifdef TESTING
-    // Optionally write the matrix in COO format for testing.
-    printf("Writing matrix in COO format to test_COO ...");
-    FILE *fp = fopen("test_COO", "w");
-    fprintf(fp, "%d\t%d\t%d\n", coo.num_rows, coo.num_cols, coo.num_nonzeros);
-    fprintf(fp, "coo.rows:\n");
-    for (int i = 0; i < coo.num_nonzeros; i++)
-    {
-        fprintf(fp, "%d ", coo.rows[i]);
-    }
-    fprintf(fp, "\n\ncoo.cols:\n");
-    for (int i = 0; i < coo.num_nonzeros; i++)
-    {
-        fprintf(fp, "%d ", coo.cols[i]);
-    }
-    fprintf(fp, "\n\ncoo.vals:\n");
-    for (int i = 0; i < coo.num_nonzeros; i++)
-    {
-        fprintf(fp, "%f ", coo.vals[i]);
-    }
-    fprintf(fp, "\n");
-    fclose(fp);
-    printf("... done!\n");
-#endif
 
     // Initialize host arrays.
     float *x = (float *)malloc(coo.num_cols * sizeof(float));
@@ -121,23 +98,6 @@ int main(int argc, char **argv)
 
     /* Benchmarking */
     double coo_gflops = benchmark_coo_spmv(&coo, x, y);
-#ifdef TESTING
-    // Optionally write the x and y vectors for testing.
-    printf("Writing x and y vectors ...");
-    FILE *fp = fopen("test_x", "w");
-    for (int i = 0; i < coo.num_cols; i++)
-    {
-        fprintf(fp, "%f\n", x[i]);
-    }
-    fclose(fp);
-    fp = fopen("test_y", "w");
-    for (int i = 0; i < coo.num_rows; i++)
-    {
-        fprintf(fp, "%f\n", y[i]);
-    }
-    fclose(fp);
-    printf("... done!\n");
-#endif
 
     delete_coo_matrix(&coo);
     free(x);

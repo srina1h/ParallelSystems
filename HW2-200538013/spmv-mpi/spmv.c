@@ -40,52 +40,6 @@ void verify_integer_portion(float *sequential_y, float *parallel_y, int num_rows
         printf("Verification failed: Some integer portions do not match!\n");
 }
 
-// double benchmark_coo_spmv(coo_matrix *coo, float *x, float *y)
-// {
-//     int num_nonzeros = coo->num_nonzeros;
-//     // Make a copy of y to use for each iteration so that y doesn't accumulate.
-//     // Or, if you want to time the full accumulated operation, reinitialize y before verification.
-//     // For instance, use a local temporary result vector.
-//     float *temp_y = (float *)calloc(coo->num_rows, sizeof(float));
-
-//     // Warmup: perform one iteration using temp_y
-//     timer time_one_iteration;
-//     timer_start(&time_one_iteration);
-//     for (int i = 0; i < num_nonzeros; i++)
-//     {
-//         y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
-//     }
-//     double estimated_time = seconds_elapsed(&time_one_iteration);
-
-//     // Determine number of iterations dynamically
-//     int num_iterations = MAX_ITER;
-//     if (estimated_time != 0)
-//         num_iterations = min(MAX_ITER, max(MIN_ITER, (int)(TIME_LIMIT / estimated_time)));
-//     printf("\tPerforming %d iterations\n", num_iterations);
-
-//     // Zero out temp_y before timing multiple iterations.
-//     for (int i = 0; i < coo->num_rows; i++)
-//         temp_y[i] = 0;
-
-//     // Time several SpMV iterations on temp_y
-//     timer t;
-//     timer_start(&t);
-//     for (int j = 0; j < num_iterations; j++)
-//         for (int i = 0; i < num_nonzeros; i++)
-//         {
-//             temp_y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
-//         }
-//     double msec_per_iteration = milliseconds_elapsed(&t) / (double)num_iterations;
-
-//     double sec_per_iteration = msec_per_iteration / 1000.0;
-//     double GFLOPs = (sec_per_iteration == 0) ? 0 : (2.0 * (double)coo->num_nonzeros / sec_per_iteration) / 1e9;
-//     double GBYTEs = (sec_per_iteration == 0) ? 0 : ((double)bytes_per_coo_spmv(coo) / sec_per_iteration) / 1e9;
-//     printf("\tbenchmarking COO-SpMV: %8.4f ms ( %5.2f GFLOP/s %5.1f GB/s)\n", msec_per_iteration, GFLOPs, GBYTEs);
-
-//     free(temp_y);
-//     return msec_per_iteration;
-// }
-
 int main(int argc, char **argv)
 {
     int rank, size;
@@ -105,6 +59,7 @@ int main(int argc, char **argv)
             MPI_Abort(MPI_COMM_WORLD, -1);
         }
         char *mm_filename = argv[1];
+        printf("Reading matrix from file %s\n", mm_filename);
         read_coo_matrix(&global_coo, mm_filename);
         global_num_rows = global_coo.num_rows;
         global_num_cols = global_coo.num_cols;
