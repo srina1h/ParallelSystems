@@ -47,9 +47,9 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    coo_matrix global_coo; // global matrix (only used on rank 0)
+    coo_matrix global_coo;
     int global_num_rows, global_num_cols;
-    float *x = NULL; // global vector x
+    float *x = NULL;
 
     if (rank == 0)
     {
@@ -64,7 +64,6 @@ int main(int argc, char **argv)
         global_num_rows = global_coo.num_rows;
         global_num_cols = global_coo.num_cols;
 
-        // Initialize global vector x with random values
         x = (float *)malloc(global_num_cols * sizeof(float));
         srand(13);
         for (int i = 0; i < global_num_cols; i++)
@@ -79,23 +78,18 @@ int main(int argc, char **argv)
     MPI_Bcast(&global_num_rows, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&global_num_cols, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    // Make sure all processes have vector x.
     if (rank != 0)
     {
         x = (float *)malloc(global_num_cols * sizeof(float));
     }
     MPI_Bcast(x, global_num_cols, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-    // Determine the row partition for each MPI process.
-    // Here, we partition rows as evenly as possible.
     int rows_per_proc = global_num_rows / size;
     int extra = global_num_rows % size;
     int rstart = rank * rows_per_proc + (rank < extra ? rank : extra);
     int rcount = rows_per_proc + (rank < extra ? 1 : 0);
     int rend = rstart + rcount;
 
-    // Partition the matrix among processes.
-    // Rank 0 filters the global COO matrix and sends each process its appropriate rows.
     int local_nonzeros;
     int *local_rows = NULL;
     int *local_cols = NULL;
@@ -103,7 +97,7 @@ int main(int argc, char **argv)
 
     if (rank == 0)
     {
-        // Filter for rank 0 (its part: rows [rstart, rend))
+        // Filter for rank 0
         local_nonzeros = 0;
         for (int i = 0; i < global_coo.num_nonzeros; i++)
         {
@@ -127,7 +121,7 @@ int main(int argc, char **argv)
                 idx++;
             }
         }
-        // For every other process, filter its part and send the data.
+        // For every other process, filter its part
         for (int p = 1; p < size; p++)
         {
             int prstart = p * rows_per_proc + (p < extra ? p : extra);
@@ -183,23 +177,11 @@ int main(int argc, char **argv)
         }
     }
 
-    // Build a local COO structure for the local partition.
-    coo_matrix local_coo;
-    local_coo.num_rows = rcount;
-    local_coo.num_cols = global_num_cols;
-    local_coo.num_nonzeros = local_nonzeros;
-    local_coo.rows = local_rows;
-    local_coo.cols = local_cols;
-    local_coo.vals = local_vals;
-
-    // Allocate local y vector (initialized to zero)
+    // Allocate local y vector - 0 init
     float *local_y = (float *)calloc(rcount, sizeof(float));
 
     MPI_Barrier(MPI_COMM_WORLD);
     double t_start = MPI_Wtime();
-
-    // Run the local SpMV benchmark computation.
-    // double local_time = benchmark_coo_spmv(&local_coo, x, local_y);
 
     for (int i = 0; i < local_nonzeros; i++)
     {

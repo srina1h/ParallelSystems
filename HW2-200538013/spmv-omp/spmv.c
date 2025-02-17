@@ -38,10 +38,10 @@ double benchmark_coo_spmv(coo_matrix *coo, float *x, float *y)
         y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
     }
 
-    // Measure the elapsed time in seconds.
+    // Measure the elapsed time in s
     double sec = seconds_elapsed(&t);
 
-    // Convert seconds to milliseconds for printing.
+    // Convert seconds to ms
     double msec = sec * 1000.0;
 
     // Calculate GFLOP/s: each nonzero requires two flops (a multiply and an add).
@@ -52,6 +52,7 @@ double benchmark_coo_spmv(coo_matrix *coo, float *x, float *y)
 
     return sec;
 }
+
 int main(int argc, char **argv)
 {
     if (get_arg(argc, argv, "help") != NULL)
@@ -85,7 +86,6 @@ int main(int argc, char **argv)
     printf("\nfile=%s rows=%d cols=%d nonzeros=%d\n", mm_filename, coo.num_rows, coo.num_cols, coo.num_nonzeros);
     fflush(stdout);
 
-    // Initialize host arrays.
     float *x = (float *)malloc(coo.num_cols * sizeof(float));
     float *y = (float *)malloc(coo.num_rows * sizeof(float));
 
@@ -96,7 +96,6 @@ int main(int argc, char **argv)
     for (int i = 0; i < coo.num_rows; i++)
         y[i] = 0;
 
-    /* Benchmarking */
     double coo_gflops = benchmark_coo_spmv(&coo, x, y);
 
     delete_coo_matrix(&coo);
