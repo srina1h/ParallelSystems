@@ -198,7 +198,7 @@ int main(int argc, char **argv)
 
 // Run the local SpMV computation with OpenMP parallelization.
 // The atomic ensures that when multiple threads update the same row, race conditions are prevented.
-#pragma omp parallel for default(none) shared(local_nonzeros, local_y, local_rows, local_vals, x)
+#pragma omp parallel for default(none) shared(local_nonzeros, local_y, local_rows, local_vals, x, local_cols)
     for (int i = 0; i < local_nonzeros; i++)
     {
 #pragma omp atomic
