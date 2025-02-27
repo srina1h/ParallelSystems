@@ -268,7 +268,7 @@ int main(int argc, char *argv[])
     opts = parse_args(argc, argv);
   }
 
-  // Broadcast options to all processes (field-by-field to ensure portability)
+  // Broadcast options to all processes (field-by-field)
   MPI_Bcast(&(opts.m), 1, MPI_INT, 0, MPI_COMM_WORLD);
   MPI_Bcast(&(opts.n), 1, MPI_INT, 0, MPI_COMM_WORLD);
   MPI_Bcast(&(opts.k), 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -312,12 +312,16 @@ int main(int argc, char *argv[])
     printf("Verbose: %s\n", opts.verbose ? "true" : "false");
   }
 
+  // Synchronize all processes before timing the SUMMA operation
+  MPI_Barrier(MPI_COMM_WORLD);
+  double t_start = MPI_Wtime();
+
   // Call the appropriate SUMMA function based on the stationary option
-  if (opts.stationary == 'a')
+  if (opts.stationary == 'a' || opts.stationary == 'A')
   {
     summa_stationary_a(opts.m, opts.n, opts.k, nprocs, rank);
   }
-  else if (opts.stationary == 'b')
+  else if (opts.stationary == 'b' || opts.stationary == 'B')
   {
     summa_stationary_b(opts.m, opts.n, opts.k, nprocs, rank);
   }
@@ -329,6 +333,16 @@ int main(int argc, char *argv[])
     }
     MPI_Finalize();
     return 1;
+  }
+
+  // Synchronize all processes after the computation to get the accurate elapsed time
+  MPI_Barrier(MPI_COMM_WORLD);
+  double t_end = MPI_Wtime();
+
+  // The root process prints the elapsed time for the SUMMA operation
+  if (rank == 0)
+  {
+    printf("SUMMA operation time: %f seconds\n", t_end - t_start);
   }
 
   MPI_Finalize();
