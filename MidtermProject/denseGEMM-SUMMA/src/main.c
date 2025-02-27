@@ -83,8 +83,8 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank)
 
   if (rank == 0)
   {
-    double *A = generate_random_matrix(m, k);
-    double *B = generate_random_matrix(k, n);
+    double *A = generate_matrix_A(m, k, 2);
+    double *B = generate_matrix_B(k, n, 2);
     distribute_matrix_blocks(A, A_local, m, k, block_m, block_k, grid_comm);
     distribute_matrix_blocks(B, B_temp /* Temporary */, k /* Rows */, n /* Cols */, block_k /* Block rows */, block_n /* Block cols */, grid_comm);
     free(A);
@@ -130,8 +130,8 @@ void summa_stationary_b(int m, int n, int k, int nprocs, int rank)
   double *B = NULL;
   if (rank == 0)
   {
-    A = generate_random_matrix(m, k);
-    B = generate_random_matrix(k, n);
+    A = generate_matrix_A(m, k, 2);
+    B = generate_matrix_B(k, n, 2);
   }
 
   // Distribute matrix A among processes.
@@ -162,7 +162,7 @@ void summa_stationary_b(int m, int n, int k, int nprocs, int rank)
     MPI_Bcast(A_temp, block_m * block_k, MPI_DOUBLE, iter, row_comm);
 
     // Compute the local matrix multiplication: C_local += A_temp * B_local
-    matrix_multiply_add(A_temp, B_local, C_local, block_m, block_k, block_n);
+    matmul(A_temp, B_local, C_local, block_m, block_n, block_k);
   }
 
   // Gather the computed C blocks back to the root process.
