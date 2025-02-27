@@ -51,45 +51,77 @@ void distribute_matrix_blocks(double *matrix, double *local_block, int rows, int
   MPI_Type_free(&block_type);
 }
 
-// Stationary-A SUMMA implementation
 void summa_stationary_a(int m, int n, int k, int nprocs, int rank)
 {
-  // Grid setup
-  int p = sqrt(nprocs); // Process grid dimension
+  // Determine process grid dimensions (assume nprocs is a perfect square)
+  int p = (int)sqrt(nprocs);
 
-  // Create a Cartesian communicator
+  // Create a 2D Cartesian communicator
   MPI_Comm grid_comm;
   int dims[2] = {p, p};
-  int periods[2] = {0, 0}; // Non-periodic grid
+  int periods[2] = {0, 0}; // non-periodic
   MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, 1, &grid_comm);
 
-  // Get process coordinates in the grid
+  // Get coordinates of current process in the grid
   int coords[2];
   MPI_Cart_coords(grid_comm, rank, 2, coords);
+  int myRow = coords[0], myCol = coords[1];
 
-  // Create column communicators for B movement
+  // Create column communicators (each column contains processes that share the same column index)
   MPI_Comm col_comm;
-  MPI_Comm_split(grid_comm, coords[1], coords[0], &col_comm);
+  MPI_Comm_split(grid_comm, myCol, myRow, &col_comm);
 
-  // Determine local block sizes
+  // Compute local block sizes using ceiling division
   int block_m = (m + p - 1) / p;
   int block_k = (k + p - 1) / p;
   int block_n = (n + p - 1) / p;
 
-  // Allocate memory for local matrices
-  double *A_local = malloc(block_m * block_k * sizeof(double));
-  double *B_temp = malloc(block_k * block_n * sizeof(double));
-  double *C_local = calloc(block_m * block_n, sizeof(double)); // Initialize C_local to zero
+  // Allocate local buffers: A_local remains stationary,
+  // B_temp will hold blocks broadcasted along columns, and C_local accumulates the product.
+  double *A_local = (double *)malloc(block_m * block_k * sizeof(double));
+  double *B_temp = (double *)malloc(block_k * block_n * sizeof(double));
+  double *C_local = (double *)calloc(block_m * block_n, sizeof(double)); // zero initialized
 
+  // Only rank 0 generates the full matrices
+  double *A = NULL, *B = NULL;
   if (rank == 0)
   {
-    double *A = generate_matrix_A(m, k, 2);
-    double *B = generate_matrix_B(k, n, 2);
-    distribute_matrix_blocks(A, A_local, m, k, block_m, block_k, grid_comm);
-    distribute_matrix_blocks(B, B_temp /* Temporary */, k /* Rows */, n /* Cols */, block_k /* Block rows */, block_n /* Block cols */, grid_comm);
+    A = generate_matrix_A(m, k, 2); // Assumes a generator function exists in utils.c
+    B = generate_matrix_B(k, n, 2);
+  }
+  // Distribute matrix blocks. Each process (including non-root) calls the function.
+  distribute_matrix_blocks(A, A_local, m, k, block_m, block_k, grid_comm);
+  distribute_matrix_blocks(B, B_temp, k, n, block_k, block_n, grid_comm);
+  if (rank == 0)
+  {
     free(A);
     free(B);
   }
+
+  // Main SUMMA computation loop:
+  // For each iteration, broadcast the corresponding B block within each column.
+  for (int iter = 0; iter < p; iter++)
+  {
+    // The process in each column with row coordinate equal to 'iter' serves as the root for B.
+    MPI_Bcast(B_temp, block_k * block_n, MPI_DOUBLE, iter, col_comm);
+
+    // Update local C: C_local += A_local * received B_temp
+    matrix_multiply_add(A_local, B_temp, C_local, block_m, block_k, block_n);
+
+    // Optional barrier to ensure all processes complete the iteration (may help with debug)
+    MPI_Barrier(col_comm);
+  }
+
+  // (Optional) Gather the C_local blocks to form the final matrix C at the root.
+  // This code is omitted here; you might use a gather function that reassembles
+  // the blocks in their proper positions.
+
+  // Clean up allocated memory and communicators.
+  free(A_local);
+  free(B_temp);
+  free(C_local);
+  MPI_Comm_free(&col_comm);
+  MPI_Comm_free(&grid_comm);
 }
 
 void summa_stationary_b(int m, int n, int k, int nprocs, int rank)
