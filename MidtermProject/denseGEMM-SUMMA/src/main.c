@@ -281,11 +281,11 @@ int main(int argc, char *argv[])
   }
 
   // Call the appropriate SUMMA function based on the stationary option
-  if (opts.stationary == 'A')
+  if (opts.stationary == 'a')
   {
     summa_stationary_a(opts.m, opts.n, opts.k, nprocs, rank);
   }
-  else if (opts.stationary == 'B')
+  else if (opts.stationary == 'b')
   {
     summa_stationary_b(opts.m, opts.n, opts.k, nprocs, rank);
   }
