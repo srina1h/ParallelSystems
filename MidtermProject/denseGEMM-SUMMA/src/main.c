@@ -106,8 +106,8 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank)
     MPI_Bcast(B_temp, block_k * block_n, MPI_DOUBLE, iter, col_comm);
 
     // Update local C: C_local += A_local * received B_temp
-    matrix_multiply_add(A_local, B_temp, C_local, block_m, block_k, block_n);
-
+    // matrix_multiply_add(A_local, B_temp, C_local, block_m, block_k, block_n);
+    matmul(A_local, B_temp, C_local, block_m, block_n, block_k);
     // Optional barrier to ensure all processes complete the iteration (may help with debug)
     MPI_Barrier(col_comm);
   }
