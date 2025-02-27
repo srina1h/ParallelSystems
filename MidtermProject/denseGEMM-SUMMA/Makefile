@@ -27,6 +27,6 @@ clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
 
 run:
-	mpirun -np 4 ./summa -m 16 -n 16 -k 16 -b 16 -s b -v -p
+	mpirun -np 4 ./summa -m 16 -n 16 -k 16 -b 16 -s B -v -p
 
 .PHONY: all clean run directories
