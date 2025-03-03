@@ -4,22 +4,22 @@
 #include <stdlib.h>
 #include <string.h>
 
-void matmul(double *A, double *B, double *C, int m, int n, int k)
+void matmul(float *A, float *B, float *C, int m, int n, int k)
 {
     // Initialize output matrix to zero
-    memset(C, 0, m * n * sizeof(double));
+    memset(C, 0, m * n * sizeof(float));
 
     // C[i,j] = sum(A[i,p] * B[p,j])
     for (int i = 0; i < m; i++)
     {
         for (int j = 0; j < n; j++)
         {
-            double sum = 0.0f;
+            float sum = 0.0f;
             for (int p = 0; p < k; p++)
             {
                 // A is m×k, B is k×n
-                double a_val = A[i * k + p]; // A[i,p]
-                double b_val = B[p * n + j]; // B[p,j]
+                float a_val = A[i * k + p]; // A[i,p]
+                float b_val = B[p * n + j]; // B[p,j]
                 sum += a_val * b_val;
             }
             C[i * n + j] = sum;
@@ -27,12 +27,12 @@ void matmul(double *A, double *B, double *C, int m, int n, int k)
     }
 }
 
-void verify_result(double *C_global, double *A, double *B, int m, int n, int k)
+void verify_result(float *C_global, float *A, float *B, int m, int n, int k)
 {
     int errors = 0;
-    double tolerance = 1e-5;
+    float tolerance = 1e-5;
     // Perform reference matrix multiplication
-    double *C_ref = (double *)calloc(m * n, sizeof(double));
+    float *C_ref = (float *)calloc(m * n, sizeof(float));
     if (!C_ref)
     {
         printf("Error: Failed to allocate memory for C_ref\n");
@@ -44,7 +44,7 @@ void verify_result(double *C_global, double *A, double *B, int m, int n, int k)
     {
         for (int j = 0; j < n; j++)
         {
-            double sum = 0.0f;
+            float sum = 0.0f;
             for (int p = 0; p < k; p++)
             {
                 sum += A[i * k + p] * B[p * n + j];
@@ -54,8 +54,8 @@ void verify_result(double *C_global, double *A, double *B, int m, int n, int k)
     }
 
     // Compute detailed error statistics
-    double max_error = 0.0f;
-    double avg_error = 0.0f;
+    float max_error = 0.0f;
+    float avg_error = 0.0f;
     int max_error_index = -1;
     int max_error_i = -1, max_error_j = -1;
 
@@ -64,7 +64,7 @@ void verify_result(double *C_global, double *A, double *B, int m, int n, int k)
         for (int j = 0; j < n; j++)
         {
             int idx = i * n + j;
-            double curr_error = fabs(C_global[idx] - C_ref[idx]);
+            float curr_error = fabs(C_global[idx] - C_ref[idx]);
             avg_error += curr_error;
 
             if (curr_error > max_error)
@@ -100,27 +100,27 @@ void verify_result(double *C_global, double *A, double *B, int m, int n, int k)
 }
 
 // Utility function to load matrix from file or generate
-double *generate_matrix_A(int rows, int cols, int rank)
+float *generate_matrix_A(int rows, int cols, int rank)
 {
-    double *matrix = malloc(rows * cols * sizeof(double));
+    float *matrix = malloc(rows * cols * sizeof(float));
     srand(42);
 
     for (int i = 0; i < rows * cols; i++)
     {
-        matrix[i] = (double)rand() / RAND_MAX;
+        matrix[i] = (float)rand() / RAND_MAX;
     }
 
     return matrix;
 }
 
-double *generate_matrix_B(int rows, int cols, int rank)
+float *generate_matrix_B(int rows, int cols, int rank)
 {
-    double *matrix = malloc(rows * cols * sizeof(double));
+    float *matrix = malloc(rows * cols * sizeof(float));
     srand(142);
 
     for (int i = 0; i < rows * cols; i++)
     {
-        matrix[i] = (double)rand() / RAND_MAX;
+        matrix[i] = (float)rand() / RAND_MAX;
     }
 
     return matrix;
