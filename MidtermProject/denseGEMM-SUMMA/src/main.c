@@ -79,6 +79,8 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank) {
   // Get process coordinates
   int coords[2];
   MPI_Cart_coords(comm_2d, rank, 2, coords);
+  int my_row = coords[0];
+  int my_col = coords[1];
   
   // Create row and column communicators
   MPI_Comm row_comm, col_comm;
@@ -131,30 +133,26 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank) {
   
   // SUMMA computation with A stationary
   for (int l = 0; l < grid_size; l++) {
-    // Calculate the broadcast coordinates for this iteration
-    int A_bcast_coords = (coords[1] + grid_size - l) % grid_size;
-    int B_bcast_coords = (coords[0] + grid_size - l) % grid_size;
+    // In each step, we need block A(i,l) and B(l,j) where
+    // i is my row and j is my column in the process grid
     
-    // Broadcast A along row
-    if (coords[1] == A_bcast_coords) {
-      // Copy my local A block to temp_A
+    // Copy my local A if it's needed for broadcast
+    if (my_col == l) {
       memcpy(temp_A, local_A, local_m * local_k * sizeof(float));
     }
     
-    // Broadcast A from process with column coordinate A_bcast_coords in each row
-    MPI_Bcast(temp_A, local_m * local_k, MPI_FLOAT, A_bcast_coords, row_comm);
+    // Broadcast A(i,l) along row i
+    MPI_Bcast(temp_A, local_m * local_k, MPI_FLOAT, l, row_comm);
     
-    // Broadcast B along column
-    if (coords[0] == B_bcast_coords) {
-      // Copy my local B block to temp_B
+    // Copy my local B if it's needed for broadcast
+    if (my_row == l) {
       memcpy(temp_B, local_B, local_k * local_n * sizeof(float));
     }
     
-    // Broadcast B from process with row coordinate B_bcast_coords in each column
-    MPI_Bcast(temp_B, local_k * local_n, MPI_FLOAT, B_bcast_coords, col_comm);
+    // Broadcast B(l,j) along column j
+    MPI_Bcast(temp_B, local_k * local_n, MPI_FLOAT, l, col_comm);
     
-    // Local matrix multiplication: temp_C = temp_A * temp_B
-    memset(temp_C, 0, local_m * local_n * sizeof(float));
+    // Local matrix multiplication: C += A * B
     matmul(temp_A, temp_B, temp_C, local_m, local_n, local_k);
     
     // Accumulate result into local_C
@@ -232,6 +230,8 @@ void summa_stationary_b(int m, int n, int k, int nprocs, int rank) {
   // Get process coordinates
   int coords[2];
   MPI_Cart_coords(comm_2d, rank, 2, coords);
+  int my_row = coords[0];
+  int my_col = coords[1];
   
   // Create row and column communicators
   MPI_Comm row_comm, col_comm;
@@ -284,30 +284,26 @@ void summa_stationary_b(int m, int n, int k, int nprocs, int rank) {
   
   // SUMMA computation with B stationary
   for (int l = 0; l < grid_size; l++) {
-    // Calculate the broadcast coordinates for this iteration
-    int A_bcast_coords = (coords[0] + grid_size - l) % grid_size;
-    int B_bcast_coords = (coords[1] + grid_size - l) % grid_size;
+    // For B stationary, we need A(i,l) and B(l,j)
+    // but since B is stationary, we only rotate A
     
-    // Broadcast A along column
-    if (coords[0] == A_bcast_coords) {
-      // Copy my local A block to temp_A
+    // Copy my local A if in column l
+    if (my_col == l) {
       memcpy(temp_A, local_A, local_m * local_k * sizeof(float));
     }
     
-    // Broadcast A from process with row coordinate A_bcast_coords in each column
-    MPI_Bcast(temp_A, local_m * local_k, MPI_FLOAT, A_bcast_coords, col_comm);
+    // Broadcast A(i,l) along row
+    MPI_Bcast(temp_A, local_m * local_k, MPI_FLOAT, l, row_comm);
     
-    // Broadcast B along row
-    if (coords[1] == B_bcast_coords) {
-      // Copy my local B block to temp_B
+    // Copy my local B if in row l
+    if (my_row == l) {
       memcpy(temp_B, local_B, local_k * local_n * sizeof(float));
     }
     
-    // Broadcast B from process with column coordinate B_bcast_coords in each row
-    MPI_Bcast(temp_B, local_k * local_n, MPI_FLOAT, B_bcast_coords, row_comm);
+    // Broadcast B(l,j) along column
+    MPI_Bcast(temp_B, local_k * local_n, MPI_FLOAT, l, col_comm);
     
-    // Local matrix multiplication: temp_C = temp_A * temp_B
-    memset(temp_C, 0, local_m * local_n * sizeof(float));
+    // Local matrix multiplication: C += A * B
     matmul(temp_A, temp_B, temp_C, local_m, local_n, local_k);
     
     // Accumulate result into local_C
