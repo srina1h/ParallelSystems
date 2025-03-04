@@ -162,7 +162,7 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank)
 
   int coords[2];
   MPI_Cart_coords(grid_comm, rank, 2, coords);
-  int myRow = coords, myCol = coords;
+  int myRow = coords[0], myCol = coords[1];
 
   // Create row and column communicators.
   MPI_Comm row_comm, col_comm;
