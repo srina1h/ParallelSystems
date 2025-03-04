@@ -86,17 +86,12 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank)
   float *A = NULL, *B = NULL;
   if (rank == 0)
   {
-    A = generate_matrix_A(m, k, 2); // Assumes a generator function exists in utils.c
+    A = generate_matrix_A(m, k, 2);
     B = generate_matrix_B(k, n, 2);
   }
   // Distribute matrix blocks. Each process (including non-root) calls the function.
   distribute_matrix_blocks(A, A_local, m, k, block_m, block_k, grid_comm);
   distribute_matrix_blocks(B, B_temp, k, n, block_k, block_n, grid_comm);
-  if (rank == 0)
-  {
-    free(A);
-    free(B);
-  }
 
   // Main SUMMA computation loop:
   // For each iteration, broadcast the corresponding B block within each column.
@@ -119,6 +114,8 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank)
     C = (float *)malloc(m * n * sizeof(float));
     MPI_Gather(C_local, block_m * block_n, MPI_FLOAT, C, block_m * block_n, MPI_FLOAT, 0, grid_comm);
     verify_result(C, A, B, m, n, k);
+    free(A);
+    free(B);
   }
 
   // Clean up allocated memory and communicators.
@@ -180,11 +177,6 @@ void summa_stationary_b(int m, int n, int k, int nprocs, int rank)
   distribute_matrix_blocks(B, B_local, k, n, block_k, block_n, grid_comm);
 
   // Free full matrices on root after distribution.
-  if (rank == 0)
-  {
-    free(A);
-    free(B);
-  }
 
   // Main SUMMA computation loop over the panel index (iterating over block columns in A)
   for (int iter = 0; iter < p; iter++)
@@ -243,6 +235,9 @@ void summa_stationary_b(int m, int n, int k, int nprocs, int rank)
   if (rank == 0)
   {
     verify_result(C, A, B, m, n, k);
+    free(A);
+    free(B);
+    free(C);
   }
 
   // Clean up allocated memory and communicators.
@@ -250,10 +245,6 @@ void summa_stationary_b(int m, int n, int k, int nprocs, int rank)
   free(B_local);
   free(A_temp);
   free(C_local);
-  if (rank == 0)
-  {
-    free(C);
-  }
   MPI_Comm_free(&row_comm);
   MPI_Comm_free(&grid_comm);
 }
