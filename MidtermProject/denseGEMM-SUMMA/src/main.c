@@ -155,8 +155,8 @@ void distribute_matrix_blocks(float *matrix, float *local_block, int rows, int c
 void summa_stationary_a(int m, int n, int k, int nprocs, int rank)
 {
   int p = (int)sqrt(nprocs);
-  int dims = {p, p};
-  int periods = {0, 0};
+  int dims[2] = {p, p};
+  int periods[2] = {0, 0};
   MPI_Comm grid_comm;
   MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, 1, &grid_comm);
 
