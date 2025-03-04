@@ -45,7 +45,7 @@ void distribute_matrix_blocks(float *matrix, float *local_block, int rows, int c
   else
   {
     // Receive blocks in non-root processes
-    MPI_Recv(local_block, block_rows * block_cols, MPI_FLOAT, 0, 0, grid_comm, MPI_STATUS_IGNORE);
+    MPI_Recv(local_block, 1, block_type, 0, 0, grid_comm, MPI_STATUS_IGNORE);
   }
 
   MPI_Type_free(&block_type);
