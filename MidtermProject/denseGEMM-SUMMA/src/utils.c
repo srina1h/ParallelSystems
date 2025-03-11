@@ -12,17 +12,12 @@ void matmul(float *A, float *B, float *C, int m, int n, int k)
     // C[i,j] = sum(A[i,p] * B[p,j])
     for (int i = 0; i < m; i++)
     {
-        for (int j = 0; j < n; j++)
+        for (int p = 0; p < k; p++)
         {
-            float sum = 0.0f;
-            for (int p = 0; p < k; p++)
+            for (int j = 0; j < n; j++)
             {
-                // A is m×k, B is k×n
-                float a_val = A[i * k + p]; // A[i,p]
-                float b_val = B[p * n + j]; // B[p,j]
-                sum += a_val * b_val;
+                C[i * n + j] += A[i * k + p] * B[p * n + j];
             }
-            C[i * n + j] = sum;
         }
     }
 }
