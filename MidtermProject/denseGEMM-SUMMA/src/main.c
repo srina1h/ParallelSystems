@@ -217,7 +217,7 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank) {
   MPI_Comm_free(&comm_2d);
 }
 
-void summa_stationary_b(int m, int n, int k, int nprocs, int rank) {
+void summa_stationary_c(int m, int n, int k, int nprocs, int rank) {
   // Grid setup
   int grid_size = (int)sqrt(nprocs);
   
@@ -266,7 +266,6 @@ void summa_stationary_b(int m, int n, int k, int nprocs, int rank) {
   float *local_C = (float *)calloc(local_m * local_n, sizeof(float));
   float *temp_A = (float *)malloc(local_m * local_k * sizeof(float));
   float *temp_B = (float *)malloc(local_k * local_n * sizeof(float));
-  float *temp_C = (float *)calloc(local_m * local_n, sizeof(float));
   
   // Create MPI datatypes for matrix blocks
   MPI_Datatype block_type_A, block_type_B;
@@ -282,10 +281,10 @@ void summa_stationary_b(int m, int n, int k, int nprocs, int rank) {
   // Initialize C to zero
   memset(local_C, 0, local_m * local_n * sizeof(float));
   
-  // SUMMA computation with B stationary
+  // SUMMA computation with C stationary
   for (int l = 0; l < grid_size; l++) {
-    // For B stationary, we need A(i,l) and B(l,j)
-    // but since B is stationary, we only rotate A
+    // For C stationary, we need A(i,l) and B(l,j)
+    // We rotate both A and B while C stays in place
     
     // Copy my local A if in column l
     if (my_col == l) {
@@ -304,12 +303,7 @@ void summa_stationary_b(int m, int n, int k, int nprocs, int rank) {
     MPI_Bcast(temp_B, local_k * local_n, MPI_FLOAT, l, col_comm);
     
     // Local matrix multiplication: C += A * B
-    matmul(temp_A, temp_B, temp_C, local_m, local_n, local_k);
-    
-    // Accumulate result into local_C
-    for (int i = 0; i < local_m * local_n; i++) {
-      local_C[i] += temp_C[i];
-    }
+    matmul(temp_A, temp_B, local_C, local_m, local_n, local_k);
   }
   
   // Gather results
@@ -360,7 +354,6 @@ void summa_stationary_b(int m, int n, int k, int nprocs, int rank) {
   free(local_C);
   free(temp_A);
   free(temp_B);
-  free(temp_C);
   MPI_Type_free(&block_type_A);
   MPI_Type_free(&block_type_B);
   MPI_Comm_free(&row_comm);
@@ -421,11 +414,11 @@ int main(int argc, char *argv[]) {
   // Call the appropriate SUMMA function based on algorithm variant
   if (opts.stationary == 'A' || opts.stationary == 'a') {
     summa_stationary_a(opts.m, opts.n, opts.k, nprocs, rank);
-  } else if (opts.stationary == 'B' || opts.stationary == 'b') {
-    summa_stationary_b(opts.m, opts.n, opts.k, nprocs, rank);
+  } else if (opts.stationary == 'C' || opts.stationary == 'c') {
+    summa_stationary_c(opts.m, opts.n, opts.k, nprocs, rank);
   } else {
     if (rank == 0) {
-      printf("Error: Unknown stationary option '%c'. Use 'A' or 'B'.\n",
+      printf("Error: Unknown stationary option '%c'. Use 'A' or 'C'.\n",
            opts.stationary);
     }
     MPI_Finalize();

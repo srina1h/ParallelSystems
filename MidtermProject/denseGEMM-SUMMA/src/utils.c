@@ -31,6 +31,7 @@ void verify_result(float *C_global, float *A, float *B, int m, int n, int k)
 {
     if (m != 4096 || m != 8192)
     {
+        printf("Not performing verification for large matrices\n");
         return;
     }
     int errors = 0;
