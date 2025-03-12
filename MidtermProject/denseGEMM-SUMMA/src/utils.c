@@ -24,9 +24,8 @@ void matmul(float *A, float *B, float *C, int m, int n, int k)
 
 void verify_result(float *C_global, float *A, float *B, int m, int n, int k)
 {   
-    return;
     printf("Verifying result for matrix size %d x %d\n", m, n);
-    if (m != 4096 && m != 8192)
+    if (m != 4096)
     {
         printf("Not performing verification for large matrices\n");
         return;
