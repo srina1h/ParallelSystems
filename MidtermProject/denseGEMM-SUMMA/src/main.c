@@ -112,30 +112,40 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank) {
     int my_row = coords[0];
     int my_col = coords[1];
     
-    // Create row and column communicators
+    // 1. Create row and column communicators
     MPI_Comm row_comm, col_comm;
     int remain_dims[2];
     
-    remain_dims[0] = 0;
-    remain_dims[1] = 1;
+    // Row communicator: fixed row index, varying column index
+    remain_dims[0] = 0; // Don't keep row dimension
+    remain_dims[1] = 1; // Keep column dimension
     MPI_Cart_sub(comm_2d, remain_dims, &row_comm);
     
-    remain_dims[0] = 1;
-    remain_dims[1] = 0;
+    // Column communicator: varying row index, fixed column index
+    remain_dims[0] = 1; // Keep row dimension
+    remain_dims[1] = 0; // Don't keep column dimension
     MPI_Cart_sub(comm_2d, remain_dims, &col_comm);
     
-    // Calculate local matrix dimensions
-    int local_m = m / grid_size;
-    int local_n = n / grid_size;
-    int local_k = k / grid_size;
+    // 2. Calculate local block dimensions
+    int block_m = (m + grid_size - 1) / grid_size; // ceiling division
+    int block_k = (k + grid_size - 1) / grid_size;
+    int block_n = (n + grid_size - 1) / grid_size;
     
-    // Allocate memory for local matrices
-    float *local_A = (float *)malloc(local_m * local_k * sizeof(float));
-    float *local_B = (float *)malloc(local_k * local_n * sizeof(float));
-    float *local_C = (float *)calloc(local_m * local_n, sizeof(float));
-    float *temp_A = (float *)malloc(local_m * local_k * sizeof(float));
-    float *temp_B = (float *)malloc(local_k * local_n * sizeof(float));
-    float *temp_C = (float *)calloc(local_m * local_n, sizeof(float));
+    // Calculate actual local dimensions (handle edge cases)
+    int local_m = (my_row == grid_size - 1) ? (m - my_row * block_m) : block_m;
+    int local_k = (my_col == grid_size - 1) ? (k - my_col * block_k) : block_k;
+    int local_n = (my_col == grid_size - 1) ? (n - my_col * block_n) : block_n;
+    
+    // For simplicity, we'll assume dimensions are divisible by grid_size
+    local_m = m / grid_size;
+    local_k = k / grid_size;
+    local_n = n / grid_size;
+    
+    // 3. Allocate memory for local matrices
+    float *local_A = (float *)malloc(local_m * local_k * sizeof(float));  // Fixed A_ij
+    float *B_temp = (float *)malloc(local_k * local_n * sizeof(float));  // Temporary B
+    float *C_temp = (float *)calloc(local_m * local_n, sizeof(float));   // Partial results
+    float *local_C = (float *)calloc(local_m * local_n, sizeof(float));  // Final local results
     
     // Generate matrices on root process
     float *A = NULL, *B = NULL, *C = NULL;
@@ -145,7 +155,7 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank) {
         C = (float *)calloc(m * n, sizeof(float));
     }
     
-    // Create MPI datatypes
+    // Create MPI datatypes for matrix blocks
     MPI_Datatype block_type_A, block_type_B;
     MPI_Type_vector(local_m, local_k, k, MPI_FLOAT, &block_type_A);
     MPI_Type_vector(local_k, local_n, n, MPI_FLOAT, &block_type_B);
@@ -159,76 +169,121 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank) {
     
     // Distribute initial matrix blocks
     distribute_matrix_blocks(A, local_A, m, k, grid_size, comm_2d, block_type_A);
-    distribute_matrix_blocks(B, local_B, k, n, grid_size, comm_2d, block_type_B);
+    distribute_matrix_blocks(B, B_temp, k, n, grid_size, comm_2d, block_type_B);
     
     timing.dist_time = MPI_Wtime() - dist_start;
     
     // Start computation timing
     double comp_start = MPI_Wtime();
     
-    // Initialize C to zero
-    memset(local_C, 0, local_m * local_n * sizeof(float));
+    // Initialize C_temp to zero
+    memset(C_temp, 0, local_m * local_n * sizeof(float));
     
-    // SUMMA computation with A stationary
-    for (int l = 0; l < grid_size; l++) {
-        if (my_col == l) {
-            memcpy(temp_A, local_A, local_m * local_k * sizeof(float));
+    // 4. Main computation loop - only over columns (j = 0 to p-1)
+    for (int j = 0; j < grid_size; j++) {
+        // Save current B block if needed for broadcast
+        float *B_to_broadcast = (float *)malloc(local_k * local_n * sizeof(float));
+        if (my_col == j) {
+            memcpy(B_to_broadcast, B_temp, local_k * local_n * sizeof(float));
         }
         
-        MPI_Bcast(temp_A, local_m * local_k, MPI_FLOAT, l, row_comm);
+        // 5. Broadcast B within each column from process(k,j) to all processes in column j
+        // Find the process in current column j with row id = j (that's the kth process)
+        int source_row = j % grid_size;
+        int source_coords[2] = {source_row, j};
+        int source_rank;
+        MPI_Cart_rank(comm_2d, source_coords, &source_rank);
         
-        if (my_row == l) {
-            memcpy(temp_B, local_B, local_k * local_n * sizeof(float));
+        // Only processes in column j need to broadcast
+        if (my_col == j) {
+            MPI_Bcast(B_to_broadcast, local_k * local_n, MPI_FLOAT, source_row, col_comm);
         }
         
-        MPI_Bcast(temp_B, local_k * local_n, MPI_FLOAT, l, col_comm);
-        
-        memset(temp_C, 0, local_m * local_n * sizeof(float));
-        matmul(temp_A, temp_B, temp_C, local_m, local_n, local_k);
-        
-        for (int i = 0; i < local_m * local_n; i++) {
-            local_C[i] += temp_C[i];
+        // If this process is in column j, use the broadcasted B
+        if (my_col == j) {
+            // 6. Local computation: C_temp += A_ij × B_temp
+            // Since A is stationary, we multiply our fixed A with the received B
+            float *temp_result = (float *)calloc(local_m * local_n, sizeof(float));
+            matmul(local_A, B_to_broadcast, temp_result, local_m, local_n, local_k);
+            
+            // Accumulate result
+            for (int i = 0; i < local_m * local_n; i++) {
+                C_temp[i] += temp_result[i];
+            }
+            
+            free(temp_result);
         }
+        
+        free(B_to_broadcast);
     }
+    
+    // 7. Perform reduction to collect C results - reduce-scatter within each row
+    // For simplicity, we'll just gather all C_temp values to local_C
+    // In a true implementation, this would be a reduce-scatter operation
+    
+    // Create a receive buffer for the reduction
+    float *recv_buffer = (float *)calloc(local_m * local_n, sizeof(float));
+    
+    // Reduce all C_temp values within the row to get the final C blocks
+    MPI_Reduce(C_temp, recv_buffer, local_m * local_n, MPI_FLOAT, MPI_SUM, 0, row_comm);
+    
+    // Copy results to local_C
+    if (my_col == 0) {  // Only the first process in each row gets the result
+        memcpy(local_C, recv_buffer, local_m * local_n * sizeof(float));
+    }
+    
+    free(recv_buffer);
+    
+    // 8. Synchronize
+    MPI_Barrier(comm_2d);
     
     timing.comp_time = MPI_Wtime() - comp_start;
     
     // Start gathering timing
     double gather_start = MPI_Wtime();
     
-    // Gather results
+    // Gather results from all processes to construct the final C matrix
     if (rank == 0) {
+        // Copy local results to the appropriate position in the global C matrix
         for (int i = 0; i < local_m; i++) {
             for (int j = 0; j < local_n; j++) {
                 C[i * n + j] = local_C[i * local_n + j];
             }
         }
         
+        // Gather results from other processes
         for (int r = 1; r < nprocs; r++) {
             int r_coords[2];
             MPI_Cart_coords(comm_2d, r, 2, r_coords);
-            float *recv_C = (float *)malloc(local_m * local_n * sizeof(float));
             
-            MPI_Recv(recv_C, local_m * local_n, MPI_FLOAT, r, 0, comm_2d, MPI_STATUS_IGNORE);
-            
-            int start_row = r_coords[0] * local_m;
-            int start_col = r_coords[1] * local_n;
-            
-            for (int i = 0; i < local_m; i++) {
-                for (int j = 0; j < local_n; j++) {
-                    C[(start_row + i) * n + (start_col + j)] = recv_C[i * local_n + j];
+            // Only gather from processes in column 0 (they have the final results)
+            if (r_coords[1] == 0) {
+                float *recv_C = (float *)malloc(local_m * local_n * sizeof(float));
+                
+                MPI_Recv(recv_C, local_m * local_n, MPI_FLOAT, r, 0, comm_2d, MPI_STATUS_IGNORE);
+                
+                int start_row = r_coords[0] * local_m;
+                int start_col = 0; // Always 0 for column 0 processes
+                
+                for (int i = 0; i < local_m; i++) {
+                    for (int j = 0; j < local_n; j++) {
+                        C[(start_row + i) * n + (start_col + j)] = recv_C[i * local_n + j];
+                    }
                 }
+                
+                free(recv_C);
             }
-            
-            free(recv_C);
         }
         
+        // Verify results
         verify_result(C, A, B, m, n, k);
         
+        // Clean up global matrices
         free(A);
         free(B);
         free(C);
-    } else {
+    } else if (my_col == 0) {
+        // Only processes in column 0 need to send their results
         MPI_Send(local_C, local_m * local_n, MPI_FLOAT, 0, 0, comm_2d);
     }
     
@@ -242,11 +297,9 @@ void summa_stationary_a(int m, int n, int k, int nprocs, int rank) {
     
     // Clean up
     free(local_A);
-    free(local_B);
+    free(B_temp);
+    free(C_temp);
     free(local_C);
-    free(temp_A);
-    free(temp_B);
-    free(temp_C);
     MPI_Type_free(&block_type_A);
     MPI_Type_free(&block_type_B);
     MPI_Comm_free(&row_comm);
