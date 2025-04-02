@@ -1,3 +1,4 @@
+NUM_PROCESSES = 4
 CC = mpicc
 CFLAGS = -Wall -O3
 INCLUDES = -I./include
@@ -27,47 +28,51 @@ clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
 
 run:
-	mpirun -np 4 ./summa -m 16 -n 16 -k 16 -b 16 -s a -v -p
-	mpirun -np 4 ./summa -m 16 -n 16 -k 16 -b 16 -s c -v -p
+	mpirun -np $(NUM_PROCESSES) --report-mem:all --report-mpi:all ./summa -m 16 -n 16 -k 16 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) --report-mem:all --report-mpi:all ./summa -m 16 -n 16 -k 16 -b 16 -s c -v -p
+
+runvsmall:
+	mpirun -np $(NUM_PROCESSES) --report-mem:all --report-mpi:all ./summa -m 128 -n 128 -k 128 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) --report-mem:all --report-mpi:all ./summa -m 128 -n 128 -k 128 -b 16 -s c -v -p
 
 runsmall1:
-	mpirun -np 4 ./summa -m 4096 -n 4096 -k 4096 -b 16 -s a -v -p
-	mpirun -np 4 ./summa -m 4096 -n 4096 -k 4096 -b 16 -s c -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 4096 -n 4096 -k 4096 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 4096 -n 4096 -k 4096 -b 16 -s c -v -p
 
 runsmall2:
-	mpirun -np 4 ./summa -m 8192 -n 8192 -k 8192 -b 16 -s a -v -p
-	mpirun -np 4 ./summa -m 8192 -n 8192 -k 8192 -b 16 -s c -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 8192 -n 8192 -k 8192 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 8192 -n 8192 -k 8192 -b 16 -s c -v -p
 
 runmedium1:
-	mpirun -np 4 ./summa -m 16384 -n 16384 -k 16384 -b 16 -s a -v -p
-	mpirun -np 4 ./summa -m 16384 -n 16384 -k 16384 -b 16 -s c -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 16384 -n 16384 -k 16384 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 16384 -n 16384 -k 16384 -b 16 -s c -v -p
 
 runmedium2:
-	mpirun -np 4 ./summa -m 32768 -n 32768 -k 32768 -b 16 -s a -v -p
-	mpirun -np 4 ./summa -m 32768 -n 32768 -k 32768 -b 16 -s c -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 32768 -n 32768 -k 32768 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 32768 -n 32768 -k 32768 -b 16 -s c -v -p
 
 runlarge:
-	mpirun -np 4 ./summa -m 65536 -n 65536 -k 65536 -b 16 -s a -v -p
-	mpirun -np 4 ./summa -m 65536 -n 65536 -k 65536 -b 16 -s c -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 65536 -n 65536 -k 65536 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 65536 -n 65536 -k 65536 -b 16 -s c -v -p
 
 runrectsmall1:
-	mpirun -np 4 ./summa -m 4096 -n 4096 -k 128 -b 16 -s a -v -p
-	mpirun -np 4 ./summa -m 4096 -n 4096 -k 128 -b 16 -s c -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 4096 -n 4096 -k 128 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 4096 -n 4096 -k 128 -b 16 -s c -v -p
 
 runrectsmall2:
-	mpirun -np 4 ./summa -m 8192 -n 8192 -k 128 -b 16 -s a -v -p
-	mpirun -np 4 ./summa -m 8192 -n 8192 -k 128 -b 16 -s c -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 8192 -n 8192 -k 128 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 8192 -n 8192 -k 128 -b 16 -s c -v -p
 
 runrectmedium1:
-	mpirun -np 4 ./summa -m 16384 -n 16384 -k 128 -b 16 -s a -v -p
-	mpirun -np 4 ./summa -m 16384 -n 16384 -k 128 -b 16 -s c -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 16384 -n 16384 -k 128 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 16384 -n 16384 -k 128 -b 16 -s c -v -p
 
 runrectmedium2:
-	mpirun -np 4 ./summa -m 32768 -n 32768 -k 128 -b 16 -s a -v -p
-	mpirun -np 4 ./summa -m 32768 -n 32768 -k 128 -b 16 -s c -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 32768 -n 32768 -k 128 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 32768 -n 32768 -k 128 -b 16 -s c -v -p
 
 runrectlarge:
-	mpirun -np 4 ./summa -m 65536 -n 65536 -k 128 -b 16 -s a -v -p
-	mpirun -np 4 ./summa -m 65536 -n 65536 -k 128 -b 16 -s c -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 65536 -n 65536 -k 128 -b 16 -s a -v -p
+	mpirun -np $(NUM_PROCESSES) ./summa -m 65536 -n 65536 -k 128 -b 16 -s c -v -p
 
 .PHONY: all clean run directories
