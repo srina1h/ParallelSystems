@@ -4,7 +4,7 @@ CC=nvcc
 FLAG=-O3 -std=c++11 -I./include/ -diag-suppress 177,2464
 LDFLAG=-O3
 
-OBJS=spmv.o mmio.o 
+OBJS=spmv-mpi-cuda.cu mmio.c
 
 .c.o:
 	${CC} -o $@ -c ${FLAG} $<
