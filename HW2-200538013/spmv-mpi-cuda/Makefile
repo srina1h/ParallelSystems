@@ -1,8 +1,8 @@
 # CC=gcc
-CC=nvcc
+CC=mpicc
 #FLAG=-g -Wall
-# FLAG=-O3 -lm -std=c99 -I./include/ -Wno-unused-result -Wno-write-strings
-FLAG=-x cu -O3 -I./include/ -I/usr/local/opt/libomp/include
+FLAG=-O3 -ccbin=nvcc -lm -std=c99 -lcudart -I./include/ -Wno-unused-result -Wno-write-strings
+# FLAG=-x cu -O3 -I./include/ -I/usr/local/opt/libomp/include
 LDFLAG=-O3
 
 OBJS=spmv.o mmio.o 
