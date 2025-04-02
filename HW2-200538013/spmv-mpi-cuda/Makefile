@@ -1,8 +1,7 @@
 # CC=gcc
 CC=nvcc
 #FLAG=-g -Wall
-FLAG=-O3 -lmpi -lcudart -I./include/
-# FLAG=-x cu -O3 -I./include/ -I/usr/local/opt/libomp/include
+FLAG=-O3 -std=c++11 -I./include/ -diag-suppress 177,2464
 LDFLAG=-O3
 
 OBJS=spmv.o mmio.o 
@@ -12,7 +11,7 @@ OBJS=spmv.o mmio.o
 
 spmv: ${OBJS}
 # ${CC} -lm ${LDFLAG} -o $@ $^
-	${CC} -lm ${LDFLAG} -o $@ $^
+	${CC} ${FLAG} -x c mmio.c -x cu spmv-mpi-cuda.cu -ccbin mpicxx -Xcompiler "-DMPICH_SKIP_MPICXX" -o $@ -lmpi
 
 .PHONY:clean
 clean: 
